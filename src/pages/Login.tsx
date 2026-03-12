@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LogIn, UserCircle } from 'lucide-react';
+import { apiFetch, API_BASE, isRunningOnGitHubPages } from '../lib/api';
 
 export default function Login() {
   const [employeeCode, setEmployeeCode] = useState('');
@@ -17,14 +18,14 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      if (!API_BASE && isRunningOnGitHubPages()) {
+        throw new Error('ไม่พบ API ของระบบ โปรดตั้งค่า VITE_API_URL ให้ชี้ไปยัง Backend ที่ deploy');
+      }
+      const data = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_code: employeeCode, password }),
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Login failed');
 
       login(data.token, data.user);
       if (data.user.role === 'admin') {
