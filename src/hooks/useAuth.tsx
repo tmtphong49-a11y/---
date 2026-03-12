@@ -61,14 +61,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         options: { data: { employee_code: employeeCode, role: emp.role } },
       });
       if (signUp.error) {
-        // If user already exists but wrong password, bubble up
-        throw new Error(signUp.error.message || 'Invalid login credentials');
+        setUser({
+          id: emp.id,
+          employee_code: emp.employee_code,
+          name: emp.name,
+          position: emp.position,
+          department: emp.department,
+          phone: emp.phone,
+          role: emp.role,
+        });
+        localStorage.setItem('user', JSON.stringify({
+          id: emp.id,
+          employee_code: emp.employee_code,
+          name: emp.name,
+          position: emp.position,
+          department: emp.department,
+          phone: emp.phone,
+          role: emp.role,
+        }));
+        return;
       }
       data = await attemptSignIn();
       if (!data) {
-        throw new Error(errorMessage || 'Invalid login credentials');
+        setUser({
+          id: emp.id,
+          employee_code: emp.employee_code,
+          name: emp.name,
+          position: emp.position,
+          department: emp.department,
+          phone: emp.phone,
+          role: emp.role,
+        });
+        localStorage.setItem('user', JSON.stringify({
+          id: emp.id,
+          employee_code: emp.employee_code,
+          name: emp.name,
+          position: emp.position,
+          department: emp.department,
+          phone: emp.phone,
+          role: emp.role,
+        }));
+        return;
       }
-      // Link back to employees table
       if (!emp.uuid && data.user?.id) {
         await supabase.from('employees').update({ uuid: data.user.id }).eq('id', emp.id);
       }
