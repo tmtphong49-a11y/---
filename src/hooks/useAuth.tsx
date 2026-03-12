@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import bcrypt from 'bcryptjs';
 
 interface AuthContextType {
   user: any | null;
@@ -25,98 +24,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (employeeCode: string, password: string) => {
     const email = `${employeeCode}@local`;
-    let errorMessage: string | null = null;
-    let authUserId: string | null = null;
-    const attemptSignIn = async () => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) {
-        errorMessage = error.message;
-        return null;
-      }
-      authUserId = data.user?.id || null;
+    const trySignIn = async () => {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return null;
       return data;
     };
-    let data = await attemptSignIn();
-    if (!data) {
-      // Auto-provision account if employee exists and password matches hash
-      const { data: emp, error: empErr } = await supabase
-        .from('employees')
-        .select('id, employee_code, name, position, department, phone, role, password_hash, uuid')
-        .eq('employee_code', employeeCode)
-        .single();
-      if (empErr || !emp) {
-        throw new Error(errorMessage || 'Invalid login credentials');
-      }
-      const ok = await bcrypt.compare(password, emp.password_hash || '');
-      if (!ok) {
-        throw new Error('Invalid login credentials');
-      }
-      // Create auth user with this password
+    let auth = await trySignIn();
+    if (!auth) {
       const signUp = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { employee_code: employeeCode, role: emp.role } },
+        options: { data: { employee_code: employeeCode } },
       });
-      if (signUp.error) {
-        setUser({
-          id: emp.id,
-          employee_code: emp.employee_code,
-          name: emp.name,
-          position: emp.position,
-          department: emp.department,
-          phone: emp.phone,
-          role: emp.role,
-        });
-        localStorage.setItem('user', JSON.stringify({
-          id: emp.id,
-          employee_code: emp.employee_code,
-          name: emp.name,
-          position: emp.position,
-          department: emp.department,
-          phone: emp.phone,
-          role: emp.role,
-        }));
-        return;
+      if (signUp.error && !/already registered/i.test(signUp.error.message || '')) {
+        throw new Error(signUp.error.message || 'ไม่สามารถสร้างบัญชีได้');
       }
-      data = await attemptSignIn();
-      if (!data) {
-        setUser({
-          id: emp.id,
-          employee_code: emp.employee_code,
-          name: emp.name,
-          position: emp.position,
-          department: emp.department,
-          phone: emp.phone,
-          role: emp.role,
-        });
-        localStorage.setItem('user', JSON.stringify({
-          id: emp.id,
-          employee_code: emp.employee_code,
-          name: emp.name,
-          position: emp.position,
-          department: emp.department,
-          phone: emp.phone,
-          role: emp.role,
-        }));
-        return;
-      }
-      if (!emp.uuid && data.user?.id) {
-        await supabase.from('employees').update({ uuid: data.user.id }).eq('id', emp.id);
+      auth = await trySignIn();
+      if (!auth) {
+        throw new Error('Invalid login credentials');
       }
     }
-    const { data: empData, error: empErr } = await supabase
+    const { data: empRow } = await supabase
       .from('employees')
-      .select('id, employee_code, name, position, department, phone, role')
+      .select('id, employee_code, name, position, department, phone, role, uuid')
       .eq('employee_code', employeeCode)
-      .single();
-    if (empErr || !empData) {
+      .maybeSingle();
+    let profile = empRow;
+    const { data: userRes } = await supabase.auth.getUser();
+    const supaUserId = userRes?.user?.id || null;
+    if (!profile) {
+      const insertRes = await supabase
+        .from('employees')
+        .insert([{ uuid: supaUserId, employee_code: employeeCode, name: employeeCode, role: 'employee' }])
+        .select()
+        .single();
+      if (!insertRes.error) profile = insertRes.data as any;
+    } else if (!profile.uuid && supaUserId) {
+      await supabase.from('employees').update({ uuid: supaUserId }).eq('id', profile.id);
+      profile.uuid = supaUserId;
+    }
+    if (!profile) {
       throw new Error('ไม่พบข้อมูลพนักงาน');
     }
-    setUser(empData);
-    localStorage.setItem('user', JSON.stringify(empData));
+    setUser(profile);
+    localStorage.setItem('user', JSON.stringify(profile));
   };
 
   const logout = () => {
