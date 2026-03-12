@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import cors from "cors";
 
 dotenv.config();
 
@@ -23,6 +24,11 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  app.use(
+    cors({
+      origin: process.env.CORS_ORIGIN || "*",
+    })
+  );
 
   // Auth Middleware
   const authenticateToken = (req: any, res: any, next: any) => {
